@@ -1,7 +1,7 @@
 {
   "name": "arpon/framework",
   "description": "A custom PHP framework inspired by Laravel.",
-  "type": "project",
+  "type": "library",
   "license": "MIT",
   "autoload": {
     "psr-4": {
