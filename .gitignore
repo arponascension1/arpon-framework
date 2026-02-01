@@ -1,0 +1,9 @@
+# Ignore everything by default
+/*
+
+# But include these files/directories
+!.gitignore
+!/src/
+!/README.md
+!/LICENSE
+!/composer.json
