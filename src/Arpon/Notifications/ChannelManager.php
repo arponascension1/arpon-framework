@@ -8,7 +8,6 @@ class ChannelManager
 {
     protected $app;
     protected $channels = [];
-    protected $defaultChannel = 'database';
 
     public function __construct($app)
     {
@@ -143,7 +142,7 @@ class ChannelManager
      */
     public function getDefaultChannel()
     {
-        return $this->defaultChannel;
+        return $this->app['config']->get('notifications.default', 'database');
     }
 
     /**
