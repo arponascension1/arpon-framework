@@ -845,6 +845,11 @@ class Application implements ApplicationContract, ArrayAccess
         return $this->loadedProviders;
     }
 
+    public function getServiceProviders()
+    {
+        return $this->serviceProviders;
+    }
+
     /**
      * Load all configured route files dynamically.
      *

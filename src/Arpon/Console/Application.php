@@ -50,46 +50,18 @@ class Application extends SymfonyApplication
      */
     protected function bootstrap()
     {
-        // Load built-in commands
-        $this->loadBuiltInCommands();
+        // Load built-in commands from ConsoleServiceProvider
+        $providers = $this->laravel->getServiceProviders();
+        foreach ($providers as $provider) {
+            if ($provider instanceof ConsoleServiceProvider) {
+                $provider->addCommandsToConsole($this);
+                break;
+            }
+        }
         
         // Load user commands from app/Console/Commands
         if (is_dir($this->laravel->path('app/Console/Commands'))) {
             $this->loadUserCommands($this->laravel->path('app/Console/Commands'));
-        }
-    }
-
-    /**
-     * Load built-in commands.
-     *
-     * @return void
-     */
-    protected function loadBuiltInCommands()
-    {
-        $commands = [
-            new Commands\ListCommandsCommand,
-            new Commands\HelpCommand,
-            new Commands\MakeCommandCommand,
-            new Commands\ServeCommand,
-            new Commands\MigrateCommand,
-            new Commands\MigrateRollbackCommand,
-            new Commands\MigrateResetCommand,
-            new Commands\MigrateStatusCommand,
-            new Commands\MigrateInstallCommand,
-            new Commands\MakeMigrationCommand,
-            new Commands\MakeRequestCommand,
-            new Commands\MakeControllerCommand,
-            new Commands\MakeModelCommand,
-            new Commands\KeyGenerateCommand,
-            new Commands\RouteListCommand,
-            new Commands\StorageLinkCommand,
-        ];
-        
-        foreach ($commands as $command) {
-            if (method_exists($command, 'setArponApplication')) {
-                $command->setArponApplication($this->laravel);
-            }
-            $this->add($command);
         }
     }
 

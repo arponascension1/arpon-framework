@@ -59,7 +59,16 @@ abstract class Command extends SymfonyCommand
      */
     public function __construct()
     {
-        parent::__construct();
+        // Initialize with name if provided
+        if (isset($this->name)) {
+            parent::__construct($this->name);
+            
+            if (isset($this->description)) {
+                $this->setDescription($this->description);
+            }
+        } else {
+            parent::__construct();
+        }
 
         if (isset($this->signature)) {
             $this->configureUsingFluentDefinition();
