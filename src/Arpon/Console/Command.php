@@ -32,6 +32,13 @@ abstract class Command extends SymfonyCommand
     protected ?Application $application = null;
 
     /**
+     * Alias for $application property for backward compatibility.
+     *
+     * @var Application|null
+     */
+    protected ?Application $app = null;
+
+    /**
      * The name of the console command.
      *
      * @var string
@@ -145,6 +152,19 @@ abstract class Command extends SymfonyCommand
     public function setArponApplication(Application $app): void
     {
         $this->application = $app;
+        $this->app = $app; // Set alias for backward compatibility
+    }
+
+    /**
+     * Call another console command.
+     *
+     * @param  string  $command
+     * @param  array  $arguments
+     * @return int
+     */
+    public function call($command, array $arguments = [])
+    {
+        return $this->getApplication()->call($command, $arguments);
     }
 
 
