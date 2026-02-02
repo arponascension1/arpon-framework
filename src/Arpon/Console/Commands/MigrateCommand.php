@@ -5,9 +5,7 @@ namespace Arpon\Console\Commands;
 use Arpon\Console\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
-use Arpon\Database\Schema\Blueprint;
 
 class MigrateCommand extends Command
 {
@@ -16,7 +14,7 @@ class MigrateCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'migrate {--force : Force the operation to run when in production}';
+    protected $signature = 'migrate {--force : Force the operation to run when in production} {--pretend : Dump the SQL queries that would be run}';
 
     /**
      * The console command description.
@@ -34,21 +32,13 @@ class MigrateCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $repository = $this->application->make('migration.repository');
-        
-        // Create database if it doesn't exist (for MySQL)
-        $this->ensureDatabaseExists($input, $output);
-        
-        // Automatically create migration table if it doesn't exist
-        if (!$repository->repositoryExists()) {
-            $output->writeln('<info>Migration table not found. Creating it...</info>');
-            $repository->createRepository();
-            $output->writeln('<info>Migration table created successfully.</info>');
+        if (!$this->confirmToProceed('Application is in production. Do you want to continue?', $input, $output)) {
+            $output->writeln('<comment>Command cancelled.</comment>');
+            return 1;
         }
 
-        // Ensure session table exists if database driver is used
-        $this->ensureSessionTableExists($output);
-        
+        $this->prepareDatabase($input, $output);
+
         $migrator = $this->application->make('migrator');
         
         $migrator->run([$this->application->databasePath('migrations')]);
@@ -57,109 +47,72 @@ class MigrateCommand extends Command
             $output->writeln($note);
         }
 
-        $output->writeln('<info>all migration is complete</info>');
+        if (count($migrator->getNotes()) === 0) {
+            $output->writeln('<info>Nothing to migrate.</info>');
+        } else {
+            $output->writeln('<info>Migration completed successfully.</info>');
+        }
 
         return 0;
     }
 
     /**
-     * Ensure the session table exists if using database driver.
+     * Confirm before proceeding with the action.
      *
+     * @param  string  $warning
+     * @param  \Symfony\Component\Console\Input\InputInterface  $input
+     * @param  \Symfony\Component\Console\Output\OutputInterface  $output
+     * @return bool
+     */
+    protected function confirmToProceed($warning, $input, $output)
+    {
+        if ($this->application['config']->get('app.env', 'production') === 'production') {
+            if ($input->hasOption('force') && $input->getOption('force')) {
+                return true;
+            }
+
+            $helper = $this->getHelper('question');
+            $question = new ConfirmationQuestion(
+                "<question>{$warning} (yes/no)</question> ",
+                false
+            );
+
+            return $helper->ask($input, $output, $question);
+        }
+
+        return true;
+    }
+
+    /**
+     * Prepare the migration database for running.
+     *
+     * @param  \Symfony\Component\Console\Input\InputInterface  $input
      * @param  \Symfony\Component\Console\Output\OutputInterface  $output
      * @return void
      */
-    protected function ensureSessionTableExists(OutputInterface $output)
+    protected function prepareDatabase($input, $output)
     {
-        $config = $this->application['config'];
+        $this->ensureDatabaseExists($input, $output);
         
-        if ($config->get('session.driver') !== 'database') {
-            return;
-        }
+        $repository = $this->application->make('migration.repository');
         
-        $table = $config->get('session.table', 'sessions');
-        $migrationsPath = $this->application->databasePath('migrations');
-        
-        // Check if migration file already exists
-        $migrationExists = false;
-        if (is_dir($migrationsPath)) {
-            $files = scandir($migrationsPath);
-            foreach ($files as $file) {
-                if (strpos($file, "create_{$table}_table") !== false) {
-                    $migrationExists = true;
-                    break;
-                }
-            }
-        }
-
-        if (!$migrationExists) {
-            $db = $this->application['db'];
-            $schema = $db->connection()->getSchemaBuilder();
-            
-            if (!$schema->hasTable($table)) {
-                $output->writeln("<info>Session migration file not found. Creating it...</info>");
-                
-                $timestamp = date('Y_m_d_His');
-                $fileName = "{$timestamp}_create_{$table}_table.php";
-                $filePath = $migrationsPath . DIRECTORY_SEPARATOR . $fileName;
-
-                $content = $this->generateSessionMigrationContent($table);
-                
-                if (!is_dir($migrationsPath)) {
-                    mkdir($migrationsPath, 0755, true);
-                }
-                
-                file_put_contents($filePath, $content);
-                $output->writeln("<info>Session migration file created successfully: {$fileName}</info>");
-            }
+        if (!$repository->repositoryExists()) {
+            $output->writeln('<comment>Migration table not found.</comment>');
+            $this->callArtisan('migrate:install', $output);
         }
     }
 
     /**
-     * Generate the session migration content.
+     * Call another console command.
      *
-     * @param  string  $table
-     * @return string
+     * @param  string  $command
+     * @param  \Symfony\Component\Console\Output\OutputInterface  $output
+     * @return int
      */
-    protected function generateSessionMigrationContent($table)
+    protected function callArtisan($command, $output)
     {
-        return <<<PHP
-<?php
-
-use Arpon\Database\Migrations\Migration;
-use Arpon\Database\Schema\Blueprint;
-
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     *
-     * @return void
-     */
-    public function up()
-    {
-        \$this->create('{$table}', function (Blueprint \$table) {
-            \$table->string('id')->primary();
-            \$table->text('payload');
-            \$table->integer('last_activity')->unsigned();
-            \$table->integer('user_id')->nullable()->unsigned();
-            \$table->string('ip_address', 45)->nullable();
-            \$table->text('user_agent')->nullable();
-            \$table->index(['last_activity'], 'sessions_last_activity_index');
-            \$table->index(['user_id'], 'sessions_user_id_index');
-        });
-    }
-
-    /**
-     * Reverse the migrations.
-     *
-     * @return void
-     */
-    public function down()
-    {
-        \$this->dropIfExists('{$table}');
-    }
-};
-PHP;
+        $kernel = $this->application->make(\Arpon\Console\Kernel::class);
+        return $kernel->call($command, [], $output);
     }
 
     /**
@@ -169,60 +122,160 @@ PHP;
      * @param  \Symfony\Component\Console\Output\OutputInterface  $output
      * @return void
      */
-    protected function ensureDatabaseExists(InputInterface $input, OutputInterface $output)
+    protected function ensureDatabaseExists($input, $output)
     {
         $config = $this->application['config'];
-        $connection = $config->get('database.default', 'mysql');
-        $driver = $config->get("database.connections.{$connection}.driver", 'mysql');
+        $connectionName = $config->get('database.default', 'mysql');
+        $connectionConfig = $config->get("database.connections.{$connectionName}", []);
+        $driver = $connectionConfig['driver'] ?? 'mysql';
         
-        if ($driver === 'mysql') {
-            $database = $config->get("database.connections.{$connection}.database");
-            $host = $config->get("database.connections.{$connection}.host", '127.0.0.1');
-            $port = $config->get("database.connections.{$connection}.port", '3306');
-            $username = $config->get("database.connections.{$connection}.username", 'root');
-            $password = $config->get("database.connections.{$connection}.password", '');
-            
-            if ($database) {
-                try {
-                    // Try to connect to the database first
-                    $this->application['db']->connection()->getPdo();
-                } catch (\Exception $e) {
-                    if (strpos($e->getMessage(), 'Unknown database') !== false) {
-                        // Database doesn't exist, ask for confirmation
-                        $helper = $this->getHelper('question');
-                        $question = new ConfirmationQuestion(
-                            "<question>Database '{$database}' does not exist. Do you want to create it? (yes/no)</question> ",
-                            false
-                        );
-                        
-                        if (!$helper->ask($input, $output, $question)) {
-                            $output->writeln('<error>Database creation cancelled. Please create the database manually.</error>');
-                            throw new \Exception("Database '{$database}' does not exist and creation was cancelled.");
-                        }
-                        
-                        $output->writeln("<info>Creating database '{$database}'...</info>");
-                        
-                        try {
-                            // Connect without database name to create database
-                            $pdo = new \PDO(
-                                "mysql:host={$host};port={$port}",
-                                $username,
-                                $password,
-                                [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-                            );
-                            
-                            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-                            $output->writeln("<info>Database '{$database}' created successfully.</info>");
-                        } catch (\Exception $createException) {
-                            $output->writeln("<error>Failed to create database: {$createException->getMessage()}</error>");
-                            $output->writeln("<error>Please create the database manually and try again.</error>");
-                            throw $createException;
-                        }
-                    } else {
-                        throw $e;
-                    }
-                }
+        // Skip for SQLite in-memory databases
+        if ($driver === 'sqlite' && ($connectionConfig['database'] ?? '') === ':memory:') {
+            return;
+        }
+        
+        try {
+            // Try to connect to the database first
+            $this->application['db']->connection()->getPdo();
+        } catch (\Exception $e) {
+            if ($this->shouldCreateDatabase($e, $driver)) {
+                $this->createDatabase($input, $output, $connectionName, $connectionConfig);
+            } else {
+                throw $e;
             }
         }
     }
+
+    /**
+     * Determine if the exception indicates a missing database.
+     *
+     * @param  \Exception  $e
+     * @param  string  $driver
+     * @return bool
+     */
+    protected function shouldCreateDatabase(\Exception $e, $driver)
+    {
+        $message = $e->getMessage();
+        
+        if ($driver === 'mysql') {
+            return strpos($message, 'Unknown database') !== false;
+        } elseif ($driver === 'sqlite') {
+            return strpos($message, 'unable to open') !== false 
+                || strpos($message, 'no such file') !== false;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Create the database.
+     *
+     * @param  \Symfony\Component\Console\Input\InputInterface  $input
+     * @param  \Symfony\Component\Console\Output\OutputInterface  $output
+     * @param  string  $connectionName
+     * @param  array  $config
+     * @return void
+     */
+    protected function createDatabase($input, $output, $connectionName, $config)
+    {
+        $database = $config['database'] ?? 'database';
+        $driver = $config['driver'] ?? 'mysql';
+        
+        $helper = $this->getHelper('question');
+        $question = new ConfirmationQuestion(
+            "<question>Database '{$database}' does not exist on connection '{$connectionName}'. Create it? (yes/no)</question> ",
+            false
+        );
+        
+        if (!$helper->ask($input, $output, $question)) {
+            $output->writeln('<error>Database creation cancelled.</error>');
+            throw new \RuntimeException("Database '{$database}' does not exist.");
+        }
+        
+        $output->writeln("<info>Creating database '{$database}'...</info>");
+        
+        try {
+            if ($driver === 'sqlite') {
+                $this->createSQLiteDatabase($database);
+            } elseif ($driver === 'mysql') {
+                $this->createMySQLDatabase($database, $config);
+            }
+            
+            $output->writeln("<info>Database '{$database}' created successfully.</info>");
+        } catch (\Exception $e) {
+            $output->writeln("<error>Failed to create database: {$e->getMessage()}</error>");
+            throw $e;
+        }
+    }
+    
+    /**
+     * Create a SQLite database file.
+     *
+     * @param  string  $path
+     * @return void
+     */
+    protected function createSQLiteDatabase($path)
+    {
+        if ($path === ':memory:') {
+            return;
+        }
+        
+        $directory = dirname($path);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+        
+        if (!file_exists($path)) {
+            touch($path);
+        }
+    }
+    
+    /**
+     * Create a MySQL database.
+     *
+     * @param  string  $name
+     * @param  array  $config
+     * @return void
+     */
+    protected function createMySQLDatabase($name, $config)
+    {
+        $pdo = new \PDO(
+            $this->getMySQLDsn($config, false),
+            $config['username'] ?? 'root',
+            $config['password'] ?? '',
+            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+        );
+        
+        $charset = $config['charset'] ?? 'utf8mb4';
+        $collation = $config['collation'] ?? 'utf8mb4_unicode_ci';
+        
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$name}` CHARACTER SET {$charset} COLLATE {$collation}");
+    }
+    
+    /**
+     * Get MySQL DSN without database name.
+     *
+     * @param  array  $config
+     * @param  bool  $includeDatabase
+     * @return string
+     */
+    protected function getMySQLDsn(array $config, bool $includeDatabase = true)
+    {
+        $dsn = "mysql:host={$config['host']}";
+        
+        if (isset($config['port'])) {
+            $dsn .= ";port={$config['port']}";
+        }
+        
+        if ($includeDatabase && isset($config['database'])) {
+            $dsn .= ";dbname={$config['database']}";
+        }
+        
+        if (isset($config['unix_socket'])) {
+            $dsn .= ";unix_socket={$config['unix_socket']}";
+        }
+        
+        return $dsn;
+    }
 }
+

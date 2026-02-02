@@ -271,6 +271,51 @@ class MySqlGrammar extends Grammar
     }
 
     /**
+     * Compile the query to get all tables.
+     *
+     * @return string
+     */
+    public function compileGetAllTables()
+    {
+        return "SELECT table_name FROM information_schema.tables WHERE table_schema = database() AND table_type = 'BASE TABLE' ORDER BY table_name";
+    }
+
+    /**
+     * Compile a create database command.
+     *
+     * @param  string  $name
+     * @param  \Arpon\Contracts\Database\Connection  $connection
+     * @return string
+     */
+    public function compileCreateDatabase($name, $connection)
+    {
+        $config = $connection->getConfig();
+        $charset = $config['charset'] ?? 'utf8mb4';
+        $collation = $config['collation'] ?? 'utf8mb4_unicode_ci';
+        
+        return sprintf(
+            'create database if not exists %s character set %s collate %s',
+            $this->wrapValue($name),
+            $charset,
+            $collation
+        );
+    }
+
+    /**
+     * Compile a drop database if exists command.
+     *
+     * @param  string  $name
+     * @return string
+     */
+    public function compileDropDatabaseIfExists($name)
+    {
+        return sprintf(
+            'drop database if exists %s',
+            $this->wrapValue($name)
+        );
+    }
+
+    /**
      * Compile the command to enable foreign key constraints.
      *
      * @return string

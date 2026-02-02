@@ -21,6 +21,8 @@ class ConsoleServiceProvider extends ServiceProvider
         Commands\MigrateResetCommand::class,
         Commands\MigrateStatusCommand::class,
         Commands\MigrateInstallCommand::class,
+        Commands\MigrateFreshCommand::class,
+        Commands\MigrateRefreshCommand::class,
         Commands\MakeMigrationCommand::class,
         Commands\MakeRequestCommand::class,
         Commands\MakeControllerCommand::class,
@@ -30,6 +32,8 @@ class ConsoleServiceProvider extends ServiceProvider
         Commands\StorageLinkCommand::class,
         Commands\ConfigCacheCommand::class,
         Commands\ConfigClearCommand::class,
+        Commands\SessionTableCommand::class,
+        Commands\NotificationTableCommand::class,
     ];
 
     /**

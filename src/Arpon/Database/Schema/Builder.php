@@ -209,6 +209,49 @@ class Builder
     }
 
     /**
+     * Get all of the table names for the database.
+     *
+     * @return array
+     */
+    public function getAllTables()
+    {
+        $results = $this->connection->select(
+            $this->grammar->compileGetAllTables()
+        );
+
+        return array_map(function ($result) {
+            $array = is_array($result) ? $result : (array) $result;
+            return reset($array);
+        }, $results);
+    }
+
+    /**
+     * Create a database.
+     *
+     * @param  string  $name
+     * @return bool
+     */
+    public function createDatabase($name)
+    {
+        return $this->connection->statement(
+            $this->grammar->compileCreateDatabase($name, $this->connection)
+        );
+    }
+
+    /**
+     * Drop a database if it exists.
+     *
+     * @param  string  $name
+     * @return bool
+     */
+    public function dropDatabaseIfExists($name)
+    {
+        return $this->connection->statement(
+            $this->grammar->compileDropDatabaseIfExists($name)
+        );
+    }
+
+    /**
      * Get the connection used by the builder.
      *
      * @return \Arpon\Contracts\Database\Connection

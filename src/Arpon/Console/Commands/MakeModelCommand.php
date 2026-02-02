@@ -78,25 +78,12 @@ class MakeModelCommand extends Command
      */
     protected function generateModelContent($className, $namespace)
     {
-        return <<<PHP
-<?php
-
-namespace {$namespace};
-
-use Arpon\Database\Eloquent\Model;
-
-class {$className} extends Model
-{
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
-    protected array \$fillable = [
-        //
-    ];
-}
-
-PHP;
+        $stub = file_get_contents(__DIR__ . '/../stubs/model.stub');
+        
+        return str_replace(
+            ['{{ namespace }}', '{{ class }}'],
+            [$namespace, $className],
+            $stub
+        );
     }
 }

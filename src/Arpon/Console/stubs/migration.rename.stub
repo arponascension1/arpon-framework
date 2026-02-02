@@ -1,0 +1,27 @@
+<?php
+
+use Arpon\Database\Migrations\Migration;
+use Arpon\Database\Schema\Blueprint;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        $this->rename('{{ tableFrom }}', '{{ tableTo }}');
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        $this->rename('{{ tableTo }}', '{{ tableFrom }}');
+    }
+};

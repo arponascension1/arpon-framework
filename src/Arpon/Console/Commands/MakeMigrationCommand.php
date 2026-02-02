@@ -14,7 +14,7 @@ class MakeMigrationCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'make:migration {name}';
+    protected $signature = 'make:migration {name} {--create= : The table to be created} {--table= : The table to migrate}';
 
     /**
      * The console command description.
@@ -33,17 +33,11 @@ class MakeMigrationCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $name = $input->getArgument('name');
+        $create = $input->hasOption('create') ? $input->getOption('create') : null;
+        $table = $input->hasOption('table') ? $input->getOption('table') : null;
         
-        // Ensure the name ends with 'Migration'
-        if (!str_ends_with($name, 'Migration')) {
-            $name .= 'Migration';
-        }
-
-        $className = $name;
-        $tableName = $this->getTableName($name);
-        $isAlterMigration = $this->isAlterMigration($name);
         $timestamp = date('Y_m_d_His');
-        $fileName = "{$timestamp}_{$className}.php";
+        $fileName = "{$timestamp}_{$name}.php";
         $filePath = $this->application->databasePath("migrations/{$fileName}");
 
         // Create directory if it doesn't exist
@@ -52,8 +46,8 @@ class MakeMigrationCommand extends Command
             mkdir($directory, 0755, true);
         }
 
-        // Generate the migration class content
-        $content = $this->generateMigrationContent($tableName, $isAlterMigration);
+        // Detect migration type and generate content
+        $content = $this->generateMigrationContent($name, $create, $table);
 
         // Write the file
         if (file_put_contents($filePath, $content) === false) {
@@ -67,121 +61,136 @@ class MakeMigrationCommand extends Command
     }
 
     /**
-     * Check if this is an alter table migration (add/drop columns).
+     * Generate the migration content based on the migration name.
      *
      * @param  string  $name
-     * @return bool
+     * @param  string|null  $create
+     * @param  string|null  $table
+     * @return string
      */
-    protected function isAlterMigration($name)
+    protected function generateMigrationContent($name, $create = null, $table = null)
     {
-        $patterns = ['add_', 'drop_', 'modify_', 'change_', 'remove_', 'update_'];
-        
-        foreach ($patterns as $pattern) {
-            if (str_starts_with(strtolower($name), $pattern)) {
-                return true;
-            }
+        // If --create option is provided, use create stub
+        if ($create !== null && $create !== '') {
+            // --create=tablename
+            $tableName = $create;
+            return $this->getStubContent('migration.create.stub', ['table' => $tableName]);
+        } elseif ($create === '') {
+            // --create without value, extract from name
+            $tableName = $this->extractTableName($name);
+            return $this->getStubContent('migration.create.stub', ['table' => $tableName]);
         }
         
-        return false;
+        // If --table option is provided, use update stub
+        if ($table !== null && $table !== '') {
+            // --table=tablename
+            $tableName = $table;
+            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
+        } elseif ($table === '') {
+            // --table without value, extract from name
+            $tableName = $this->extractTableName($name);
+            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
+        }
+        
+        $nameLower = strtolower($name);
+        
+        // Check for create pattern: create_xxx_table
+        if (preg_match('/^create_(.+)_table$/', $nameLower, $matches)) {
+            $tableName = $matches[1];
+            return $this->getStubContent('migration.create.stub', ['table' => $tableName]);
+        }
+        
+        // Check for drop pattern: drop_xxx_table
+        if (preg_match('/^drop_(.+)_table$/', $nameLower, $matches)) {
+            $tableName = $matches[1];
+            return $this->getStubContent('migration.drop.stub', ['table' => $tableName]);
+        }
+        
+        // Check for rename pattern: rename_xxx_to_yyy_table or rename_xxx_to_yyy
+        if (preg_match('/^rename_(.+)_to_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $tableFrom = $matches[1];
+            $tableTo = $matches[2];
+            return $this->getStubContent('migration.rename.stub', [
+                'tableFrom' => $tableFrom,
+                'tableTo' => $tableTo
+            ]);
+        }
+        
+        // Check for add pattern: add_xxx_to_yyy_table or add_xxx_to_yyy
+        if (preg_match('/^add_(.+)_to_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
+        }
+        
+        // Check for remove/drop column pattern: remove_xxx_from_yyy_table or drop_xxx_from_yyy
+        if (preg_match('/^(?:remove|drop)_(.+)_from_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
+        }
+        
+        // Check if it starts with alter/modify/update/change
+        if (preg_match('/^(alter|modify|update|change)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $tableName = $matches[2];
+            // Try to extract table name if pattern is like: modify_xxx_in_yyy
+            if (preg_match('/^(?:alter|modify|update|change)_(.+)_(?:in|on)_(.+)$/', $nameLower, $subMatches)) {
+                $tableName = $subMatches[2];
+            }
+            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
+        }
+        
+        // Default: plain migration with no assumptions
+        return $this->getStubContent('migration.plain.stub', []);
     }
-
+    
     /**
-     * Get the table name from the migration name.
+     * Extract table name from migration name.
      *
      * @param  string  $name
      * @return string
      */
-    protected function getTableName($name)
+    protected function extractTableName($name)
     {
-        // Convert CamelCase to snake_case and remove 'Migration' suffix
-        $tableName = preg_replace('/([A-Z])/', '_$1', $name);
-        $tableName = str_replace('_Migration', '', $tableName);
-        $tableName = strtolower($tableName);
+        $nameLower = strtolower($name);
         
-        // Remove leading underscore if exists
-        if (str_starts_with($tableName, '_')) {
-            $tableName = substr($tableName, 1);
+        // Try to extract from common patterns
+        if (preg_match('/^create_(.+)_table$/', $nameLower, $matches)) {
+            return $matches[1];
         }
         
-        // Remove 'create_' and '_table' prefixes/suffixes
-        if (str_starts_with($tableName, 'create_')) {
-            $tableName = substr($tableName, 7);
-        }
-        if (str_ends_with($tableName, '_table')) {
-            $tableName = substr($tableName, 0, -6);
+        if (preg_match('/_to_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            return $matches[1];
         }
         
-        // For alter migrations, extract table name (e.g., 'add_phone_to_users' -> 'users')
-        if (preg_match('/(add|drop|modify|change|remove|update)_(.+)_to_(.+)/', $tableName, $matches)) {
-            $tableName = $matches[3];
-        } elseif (preg_match('/(add|drop|modify|change|remove|update)_(.+)_from_(.+)/', $tableName, $matches)) {
-            $tableName = $matches[3];
-        } elseif (preg_match('/(add|drop|modify|change|remove|update)_(.+)_in_(.+)/', $tableName, $matches)) {
-            $tableName = $matches[3];
+        if (preg_match('/_from_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            return $matches[1];
         }
+        
+        if (preg_match('/_in_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            return $matches[1];
+        }
+        
+        // Remove common prefixes/suffixes
+        $tableName = preg_replace('/^(create|drop|add|remove|modify|alter|update|change)_/', '', $nameLower);
+        $tableName = preg_replace('/_(table|migration)$/', '', $tableName);
         
         return $tableName;
     }
-
+    
     /**
-     * Generate the migration content.
+     * Get stub content with replacements.
      *
-     * @param  string  $tableName
-     * @param  bool  $isAlterMigration
+     * @param  string  $stubName
+     * @param  array  $replacements
      * @return string
      */
-    protected function generateMigrationContent($tableName, $isAlterMigration)
+    protected function getStubContent($stubName, $replacements = [])
     {
-        $content = "<?php\n\n";
-        $content .= "use Arpon\\Database\\Migrations\\Migration;\n";
-        $content .= "use Arpon\\Database\\Schema\\Blueprint;\n\n";
-        $content .= "return new class extends Migration\n";
-        $content .= "{\n";
-        $content .= "    /**\n";
-        $content .= "     * Run the migrations.\n";
-        $content .= "     *\n";
-        $content .= "     * @return void\n";
-        $content .= "     */\n";
-        $content .= "    public function up()\n";
-        $content .= "    {\n";
+        $stub = file_get_contents(__DIR__ . '/../stubs/' . $stubName);
         
-        if ($isAlterMigration) {
-            // Alter table migration
-            $content .= "        \$this->table('{$tableName}', function (Blueprint \$table) {\n";
-            $content .= "            // Add your columns here\n";
-            $content .= "            // \$table->string('column_name')->nullable();\n";
-            $content .= "        });\n";
-        } else {
-            // Create table migration
-            $content .= "        \$this->create('{$tableName}', function (Blueprint \$table) {\n";
-            $content .= "            \$table->id();\n";
-            $content .= "            \$table->timestamps();\n";
-            $content .= "        });\n";
+        foreach ($replacements as $key => $value) {
+            $stub = str_replace('{{ ' . $key . ' }}', $value, $stub);
         }
         
-        $content .= "    }\n\n";
-        $content .= "    /**\n";
-        $content .= "     * Reverse the migrations.\n";
-        $content .= "     *\n";
-        $content .= "     * @return void\n";
-        $content .= "     */\n";
-        $content .= "    public function down()\n";
-        $content .= "    {\n";
-        
-        if ($isAlterMigration) {
-            // Alter table rollback
-            $content .= "        \$this->table('{$tableName}', function (Blueprint \$table) {\n";
-            $content .= "            // Drop your columns here\n";
-            $content .= "            // \$table->dropColumn('column_name');\n";
-            $content .= "        });\n";
-        } else {
-            // Drop table
-            $content .= "        \$this->dropIfExists('{$tableName}');\n";
-        }
-        
-        $content .= "    }\n";
-        $content .= "};\n";
-        
-        return $content;
+        return $stub;
     }
 }

@@ -25,14 +25,18 @@ class SQLiteConnector extends Connector implements ConnectorContract
             return $this->createConnection('sqlite::memory:', $config, $options);
         }
 
-        $path = realpath($config['database']);
+        $path = $config['database'];
 
-        // Here we'll verify that the SQLite database exists before going any further
-        // as the developer probably wants to know if the database exists and this
-        // SQLite driver will not throw any exception if it does not by default.
-        if ($path === false) {
-            throw new InvalidArgumentException("Database ({$config['database']}) does not exist.");
+        // Create database file and directory if they don't exist
+        if (!file_exists($path)) {
+            $directory = dirname($path);
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+            touch($path);
         }
+
+        $path = realpath($path);
 
         return $this->createConnection("sqlite:{$path}", $config, $options);
     }

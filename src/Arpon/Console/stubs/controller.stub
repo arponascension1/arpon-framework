@@ -1,0 +1,19 @@
+<?php
+
+namespace {{ namespace }};
+
+use Arpon\Http\Controller;
+use Arpon\Http\Request;
+
+class {{ class }} extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Arpon\Http\Response
+     */
+    public function index()
+    {
+        //
+    }
+}

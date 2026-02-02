@@ -1,0 +1,37 @@
+<?php
+
+use Arpon\Database\Migrations\Migration;
+use Arpon\Database\Schema\Blueprint;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        $this->create('notifications', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->string('type');
+            $table->string('notifiable_type');
+            $table->unsignedBigInteger('notifiable_id');
+            $table->text('data');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+            
+            $table->index(['notifiable_type', 'notifiable_id']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        $this->dropIfExists('notifications');
+    }
+};

@@ -7,7 +7,7 @@ use Arpon\Console\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class MigrateResetCommand extends Command
+class MigrateFreshCommand extends Command
 {
 
     /**
@@ -15,14 +15,14 @@ class MigrateResetCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'migrate:reset {--force : Force the operation to run when in production}';
+    protected $signature = 'migrate:fresh {--force : Force the operation to run when in production}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Rollback all database migrations';
+    protected $description = 'Drop all tables and re-run all migrations';
 
     /**
      * Execute the console command.
@@ -33,22 +33,36 @@ class MigrateResetCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        if (!$this->confirmToProceed('Application is in production. Do you want to continue?', $input, $output)) {
+        if (!$this->confirmToProceed('Application is in production. This will drop all tables! Continue?', $input, $output)) {
             $output->writeln('<comment>Command cancelled.</comment>');
             return 1;
         }
 
-        $migrator = $this->application->make('migrator');
+        $db = $this->application['db'];
+        $connection = $db->connection();
+        $schema = $connection->getSchemaBuilder();
         
-        $reset = $migrator->reset([$this->application->databasePath('migrations')]);
-
-        foreach ($migrator->getNotes() as $note) {
-            $output->writeln($note);
+        $output->writeln('<comment>Dropping all tables...</comment>');
+        
+        // Get all tables
+        $tables = $schema->getAllTables();
+        
+        // Drop all tables
+        foreach ($tables as $tableName) {
+            $output->writeln("<info>Dropped:</info> {$tableName}");
+            $schema->dropIfExists($tableName);
         }
-
-        $output->writeln('<info>Migration reset completed successfully.</info>');
-
-        return 0;
+        
+        $output->writeln('<info>All tables dropped successfully.</info>');
+        
+        // Run migrations
+        $output->writeln('');
+        $output->writeln('<comment>Running migrations...</comment>');
+        
+        $kernel = $this->application->make(\Arpon\Console\Kernel::class);
+        $result = $kernel->call('migrate', [], $output);
+        
+        return $result;
     }
     
     /**

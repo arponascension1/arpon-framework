@@ -84,27 +84,12 @@ class MakeControllerCommand extends Command
      */
     protected function generateControllerContent($className, $namespace)
     {
-        return <<<PHP
-<?php
-
-namespace {$namespace};
-
-use Arpon\Http\Controller;
-use Arpon\Http\Request;
-
-class {$className} extends Controller
-{
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Arpon\Http\Response
-     */
-    public function index()
-    {
-        //
-    }
-}
-
-PHP;
+        $stub = file_get_contents(__DIR__ . '/../stubs/controller.stub');
+        
+        return str_replace(
+            ['{{ namespace }}', '{{ class }}'],
+            [$namespace, $className],
+            $stub
+        );
     }
 }

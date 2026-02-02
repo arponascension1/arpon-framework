@@ -50,38 +50,13 @@ class MakeCommandCommand extends Command
         }
 
         // Generate the command class content
-        $content = "<?php\n\n";
-        $content .= "namespace {$namespace};\n\n";
-        $content .= "use Arpon\Console\Command;\n";
-        $content .= "use Symfony\Component\Console\Input\InputInterface;\n";
-        $content .= "use Symfony\Component\Console\Output\OutputInterface;\n\n";
-        $content .= "class {$className} extends Command\n";
-        $content .= "{\n";
-        $content .= "    /**\n";
-        $content .= "     * The name and signature of the console command.\n";
-        $content .= "     *\n";
-        $content .= "     * @var string\n";
-        $content .= "     */\n";
-        $content .= "    protected \$signature = 'command:name';\n\n";
-        $content .= "    /**\n";
-        $content .= "     * The console command description.\n";
-        $content .= "     *\n";
-        $content .= "     * @var string\n";
-        $content .= "     */\n";
-        $content .= "    protected \$description = 'Command description';\n\n";
-        $content .= "    /**\n";
-        $content .= "     * Execute the console command.\n";
-        $content .= "     *\n";
-        $content .= "     * @param  \Symfony\Component\Console\Input\InputInterface  \$input\n";
-        $content .= "     * @param  \Symfony\Component\Console\Output\OutputInterface  \$output\n";
-        $content .= "     * @return int\n";
-        $content .= "     */\n";
-        $content .= "    protected function execute(InputInterface \$input, OutputInterface \$output)\n";
-        $content .= "    {\n";
-        $content .= "        \$output->writeln('Hello from {$className}!');\n\n";
-        $content .= "        return 0;\n";
-        $content .= "    }\n";
-        $content .= "}\n";
+        $stub = file_get_contents(__DIR__ . '/../stubs/command.stub');
+        
+        $content = str_replace(
+            ['{{ namespace }}', '{{ class }}'],
+            [$namespace, $className],
+            $stub
+        );
 
         // Write the file
         if (file_put_contents($filePath, $content) === false) {

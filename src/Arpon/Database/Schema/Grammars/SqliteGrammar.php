@@ -208,6 +208,43 @@ class SqliteGrammar extends Grammar
     }
 
     /**
+     * Compile the query to get all tables.
+     *
+     * @return string
+     */
+    public function compileGetAllTables()
+    {
+        return "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";
+    }
+
+    /**
+     * Compile a create database command.
+     *
+     * @param  string  $name
+     * @param  \Arpon\Contracts\Database\Connection  $connection
+     * @return string
+     */
+    public function compileCreateDatabase($name, $connection)
+    {
+        // For SQLite, creating a database means creating the file
+        // This is handled at the connection level
+        return 'select 1';
+    }
+
+    /**
+     * Compile a drop database if exists command.
+     *
+     * @param  string  $name
+     * @return string
+     */
+    public function compileDropDatabaseIfExists($name)
+    {
+        // For SQLite, dropping a database means deleting the file
+        // This should be handled at the connection level
+        return 'select 1';
+    }
+
+    /**
      * Compile the command to enable foreign key constraints.
      *
      * @return string
