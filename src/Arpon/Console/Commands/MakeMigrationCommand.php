@@ -33,8 +33,24 @@ class MakeMigrationCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $name = $input->getArgument('name');
-        $create = $input->hasOption('create') ? $input->getOption('create') : null;
-        $table = $input->hasOption('table') ? $input->getOption('table') : null;
+        
+        // Properly handle options - only set if user actually provided them
+        $create = null;
+        $table = null;
+        
+        if ($input->hasParameterOption(['--create'])) {
+            $create = $input->getOption('create');
+            if ($create === null || $create === '') {
+                $create = ''; // Explicit empty means extract from name
+            }
+        }
+        
+        if ($input->hasParameterOption(['--table'])) {
+            $table = $input->getOption('table');
+            if ($table === null || $table === '') {
+                $table = ''; // Explicit empty means extract from name
+            }
+        }
         
         $timestamp = date('Y_m_d_His');
         $fileName = "{$timestamp}_{$name}.php";
@@ -70,29 +86,65 @@ class MakeMigrationCommand extends Command
      */
     protected function generateMigrationContent($name, $create = null, $table = null)
     {
+        $nameLower = strtolower($name);
+        
         // If --create option is provided, use create stub
-        if ($create !== null && $create !== '') {
-            // --create=tablename
-            $tableName = $create;
-            return $this->getStubContent('migration.create.stub', ['table' => $tableName]);
-        } elseif ($create === '') {
-            // --create without value, extract from name
-            $tableName = $this->extractTableName($name);
+        if ($create !== null) {
+            $tableName = $create !== '' ? $create : $this->extractTableName($name);
             return $this->getStubContent('migration.create.stub', ['table' => $tableName]);
         }
         
         // If --table option is provided, use update stub
-        if ($table !== null && $table !== '') {
-            // --table=tablename
-            $tableName = $table;
-            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
-        } elseif ($table === '') {
-            // --table without value, extract from name
-            $tableName = $this->extractTableName($name);
+        if ($table !== null) {
+            $tableName = $table !== '' ? $table : $this->extractTableName($name);
             return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
         }
         
-        $nameLower = strtolower($name);
+        // Check for add pattern FIRST (before create pattern): add_xxx_to_yyy_table or add_xxx_to_yyy
+        if (preg_match('/^add_(.+)_to_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $columnNames = $matches[1];
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.add.stub', [
+                'table' => $tableName,
+                'column' => $this->formatColumnName($columnNames)
+            ]);
+        }
+        
+        // Check for remove/drop column pattern: remove_xxx_from_yyy_table or drop_xxx_from_yyy
+        if (preg_match('/^(?:remove|drop)_(.+)_(?:from|in)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $columnNames = $matches[1];
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.remove.stub', [
+                'table' => $tableName,
+                'column' => $this->formatColumnName($columnNames)
+            ]);
+        }
+        
+        // Check for modify pattern: modify_xxx_in_yyy_table
+        if (preg_match('/^modify_(.+)_(?:in|on)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $columnNames = $matches[1];
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.modify.stub', [
+                'table' => $tableName,
+                'column' => $this->formatColumnName($columnNames)
+            ]);
+        }
+        
+        // Check for alter pattern: alter_xxx_table or change_xxx_table
+        if (preg_match('/^(?:alter|change)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $tableName = $matches[1];
+            return $this->getStubContent('migration.alter.stub', ['table' => $tableName]);
+        }
+        
+        // Check for update pattern: update_xxx_in_yyy_table
+        if (preg_match('/^update_(.+)_(?:in|on)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
+            $columnNames = $matches[1];
+            $tableName = $matches[2];
+            return $this->getStubContent('migration.modify.stub', [
+                'table' => $tableName,
+                'column' => $this->formatColumnName($columnNames)
+            ]);
+        }
         
         // Check for create pattern: create_xxx_table
         if (preg_match('/^create_(.+)_table$/', $nameLower, $matches)) {
@@ -114,28 +166,6 @@ class MakeMigrationCommand extends Command
                 'tableFrom' => $tableFrom,
                 'tableTo' => $tableTo
             ]);
-        }
-        
-        // Check for add pattern: add_xxx_to_yyy_table or add_xxx_to_yyy
-        if (preg_match('/^add_(.+)_to_(.+?)(?:_table)?$/', $nameLower, $matches)) {
-            $tableName = $matches[2];
-            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
-        }
-        
-        // Check for remove/drop column pattern: remove_xxx_from_yyy_table or drop_xxx_from_yyy
-        if (preg_match('/^(?:remove|drop)_(.+)_from_(.+?)(?:_table)?$/', $nameLower, $matches)) {
-            $tableName = $matches[2];
-            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
-        }
-        
-        // Check if it starts with alter/modify/update/change
-        if (preg_match('/^(alter|modify|update|change)_(.+?)(?:_table)?$/', $nameLower, $matches)) {
-            $tableName = $matches[2];
-            // Try to extract table name if pattern is like: modify_xxx_in_yyy
-            if (preg_match('/^(?:alter|modify|update|change)_(.+)_(?:in|on)_(.+)$/', $nameLower, $subMatches)) {
-                $tableName = $subMatches[2];
-            }
-            return $this->getStubContent('migration.update.stub', ['table' => $tableName]);
         }
         
         // Default: plain migration with no assumptions
@@ -174,6 +204,21 @@ class MakeMigrationCommand extends Command
         $tableName = preg_replace('/_(table|migration)$/', '', $tableName);
         
         return $tableName;
+    }
+    
+    /**
+     * Format column name from migration name.
+     * Converts snake_case to readable format for hints.
+     *
+     * @param  string  $columnNames
+     * @return string
+     */
+    protected function formatColumnName($columnNames)
+    {
+        // Replace underscores between words with spaces for readability
+        // But keep them as valid identifiers in hints
+        // e.g., "email_verified_at" stays as "email_verified_at"
+        return $columnNames;
     }
     
     /**

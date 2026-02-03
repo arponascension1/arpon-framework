@@ -1,0 +1,40 @@
+<?php
+
+use Arpon\Database\Migrations\Migration;
+use Arpon\Database\Schema\Blueprint;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        $this->table('{{ table }}', function (Blueprint $table) {
+            // Modify columns here
+            // Example - change column type:
+            // $table->text('column_name')->change();
+            
+
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        $this->table('{{ table }}', function (Blueprint $table) {
+            // Reverse the modifications
+            // Example - revert column type:
+            // $table->string('column_name', 255)->change();
+            
+            // Example - revert rename:
+            // $table->renameColumn('new_name', 'old_name');
+        });
+    }
+};

@@ -1,0 +1,35 @@
+<?php
+
+use Arpon\Database\Migrations\Migration;
+use Arpon\Database\Schema\Blueprint;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        $this->table('{{ table }}', function (Blueprint $table) {
+            // Drop columns here
+            // $table->dropColumn('{{ column }}');
+
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        $this->table('{{ table }}', function (Blueprint $table) {
+            // Re-add columns with their original definitions
+            // Example:
+            // $table->string('{{ column }}')->nullable();
+        });
+    }
+};
