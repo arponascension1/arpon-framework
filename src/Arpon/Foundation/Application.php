@@ -56,6 +56,13 @@ class Application implements ApplicationContract, ArrayAccess
         array_unshift($webGroup, \Arpon\Http\Middleware\StartSession::class);
         $middleware->web($webGroup);
 
+        // Register default API middleware group if not defined
+        if (!isset($groups['api'])) {
+            $middleware->api([
+                // API routes typically don't need sessions or CSRF protection
+            ]);
+        }
+
         $this->config['middleware'] = $middleware;
         return $this;
     }
@@ -861,6 +868,8 @@ class Application implements ApplicationContract, ArrayAccess
             return;
         }
 
+        $router = $this->make('router');
+
         // Register health check route if configured
         if (isset($this->config['routes']['health'])) {
             $this->registerHealthCheckRoute($this->config['routes']['health']);
@@ -874,9 +883,19 @@ class Application implements ApplicationContract, ArrayAccess
                 continue;
             }
 
+            // Set the appropriate route type based on the key (web, api, etc.)
+            $router->setCurrentRouteType($key);
+
             // Load the route file if it exists
             if (is_string($path) && file_exists($path)) {
-                require $path;
+                // For API routes, wrap in a prefix group (like Laravel)
+                if ($key === 'api') {
+                    $router->prefix('api')->group(function () use ($path) {
+                        require $path;
+                    });
+                } else {
+                    require $path;
+                }
             }
         }
     }

@@ -38,17 +38,11 @@ class RouteListCommand extends Command
 
         $router = $this->application->make('router');
 
-        // Load web routes
-        $webRoutesPath = $this->application->basePath('routes/web.php');
-        if (file_exists($webRoutesPath)) {
-            require $webRoutesPath;
-        }
-
-        // Load console routes
-        $consoleRoutesPath = $this->application->basePath('routes/console.php');
-        if (file_exists($consoleRoutesPath)) {
-            require $consoleRoutesPath;
-        }
+        // Load routes using the centralized method
+        $reflection = new \ReflectionClass($this->application);
+        $method = $reflection->getMethod('loadRoutes');
+        $method->setAccessible(true);
+        $method->invoke($this->application);
 
         $routes = $router->getRoutes()->getRoutes();
 

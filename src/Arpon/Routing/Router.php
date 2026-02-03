@@ -20,6 +20,7 @@ class Router
     protected $middlewareGroups = [];
     protected $routeMiddleware = [];
     protected $groupStack = [];
+    protected $currentRouteType = 'web'; // Track if loading web or api routes
 
     public function __construct($app)
     {
@@ -94,8 +95,8 @@ class Router
 
         $route = new Route($methods, $uri, $action);
 
-        // Add web middleware group by default
-        $route->middleware('web');
+        // Add default middleware group based on current route type
+        $route->middleware($this->currentRouteType);
 
         if ($this->hasGroupStack()) {
             $this->mergeGroupAttributesIntoRoute($route);
@@ -551,5 +552,16 @@ class Router
     public function getCurrentRoute()
     {
         return $this->currentRoute;
+    }
+
+    public function setCurrentRouteType($type)
+    {
+        $this->currentRouteType = $type;
+        return $this;
+    }
+
+    public function getCurrentRouteType()
+    {
+        return $this->currentRouteType;
     }
 }
