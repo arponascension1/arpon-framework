@@ -98,6 +98,24 @@ if (!function_exists('response')) {
  * @param int $statusCode
  * @return \Arpon\View\View
  */
+
+
+/**
+ * Create a new JSON response instance.
+ *
+ * @param mixed $data
+ * @param int $statusCode
+ * @param array $headers
+ * @param int $encodingOptions
+ * @return \Arpon\Http\JsonResponse
+ */
+if (!function_exists('json_response')) {
+    function json_response($data = [], $statusCode = 200, $headers = [], $encodingOptions = 0)
+    {
+        return new \Arpon\Http\JsonResponse($data, $statusCode, $headers, $encodingOptions);
+    }
+}
+
 if (!function_exists('view')) {
     function view($view, $data = [], $statusCode = 200)
     {

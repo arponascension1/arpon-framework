@@ -42,6 +42,18 @@ Route::get('/', function () {
 });
 ```
 
+
+Example of a JSON response:
+
+```php
+Route::get('/health', function () {
+    return json_response([
+        'status' => 'ok',
+        'framework' => 'arpon',
+    ]);
+});
+```
+
 ## Author
 
 **Arpon** - [GitHub](https://github.com/arponascension1)

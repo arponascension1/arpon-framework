@@ -94,9 +94,7 @@ class Response
 
     public function json($data = [], $statusCode = 200, $headers = [])
     {
-        $headers['Content-Type'] = 'application/json';
-        
-        return new Response(json_encode($data), $statusCode, $headers);
+        return new JsonResponse($data, $statusCode, $headers);
     }
 
     public function redirect($url, $statusCode = 302)
